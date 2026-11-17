@@ -1,0 +1,51 @@
+# Runs on GitHub's servers every day, so your laptop can be off.
+name: Daily log
+
+on:
+  schedule:
+    - cron: '0 4 * * *'    # 04:00 UTC = 8 PM Pacific (your laptop's time zone)
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make today's commits
+        run: |
+          # Pick today's level. More commits = darker green square.
+          roll=$((RANDOM % 100))
+          dow=$(TZ=America/Los_Angeles date +%u)   # 6 = Saturday, 7 = Sunday (your time)
+          if [ "$dow" -ge 6 ] && [ $((RANDOM % 2)) -eq 0 ]; then level=rest
+          elif [ $roll -lt 15 ]; then level=rest
+          elif [ $roll -lt 50 ]; then level=calm
+          elif [ $roll -lt 75 ]; then level=normal
+          elif [ $roll -lt 92 ]; then level=busy
+          else level=crunch; fi
+
+          case $level in
+            rest)   count=0 ;;
+            calm)   count=$((1 + RANDOM % 2)) ;;
+            normal) count=$((3 + RANDOM % 3)) ;;
+            busy)   count=$((6 + RANDOM % 5)) ;;
+            crunch) count=$((11 + RANDOM % 8)) ;;
+          esac
+          echo "$level day: $count commit(s)"
+          [ "$count" -eq 0 ] && exit 0
+
+          # Your noreply email, so the commits count on your graph
+          git config user.name  "jeremybaraka-dev"
+          git config user.email "223158099+jeremybaraka-dev@users.noreply.github.com"
+
+          for i in $(seq 1 $count); do
+            ts=$(date -u '+%Y-%m-%d %H:%M:%S')
+            echo "- $ts  entry $i/$count" >> log.md
+            git add log.md
+            git commit -q -m "Daily log $ts"
+            sleep 1
+          done
+          git push
